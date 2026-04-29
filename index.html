@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RHD Talk</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#f60">
+    <link rel="apple-touch-icon" href="logo.png">
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #2a2a2a; 
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .walkie-talkie-container {
+            border: 5px solid #444;
+            border-radius: 20px;
+            padding: 30px;
+            background-color: #333;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.6);
+            text-align: center;
+            width: 350px;
+            position: relative;
+        }
+
+        .antenna {
+            width: 20px;
+            height: 80px;
+            background-color: #111;
+            position: absolute;
+            top: -75px;
+            right: 40px;
+            border-top-left-radius: 5px;
+            border-top-right-radius: 5px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 0;
+            color: #f60; 
+        }
+
+        p {
+            font-size: 0.9rem;
+            margin: 5px 0 15px;
+            color: #ccc;
+        }
+
+        .panel {
+            background-color: #1a1a1a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.85rem;
+            text-align: left;
+            border: 1px solid #444;
+        }
+
+        input {
+            width: calc(100% - 18px);
+            padding: 8px;
+            margin-top: 8px;
+            margin-bottom: 10px;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        button.action-btn {
+            background-color: #f60;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            width: 100%;
+            transition: background 0.2s;
+        }
+
+        button.action-btn:hover { background-color: #e55d00; }
+        button.action-btn:disabled { background-color: #555; cursor: not-allowed; }
+
+        #install-btn {
+            background-color: #007bff; 
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        #install-btn:hover { background-color: #0056b3; }
+
+        #my-id-display {
+            color: #f60;
+            font-family: monospace;
+            font-size: 1.1rem;
+            display: block;
+            margin-top: 5px;
+            background: #000;
+            padding: 5px;
+            text-align: center;
+            border-radius: 4px;
+            user-select: all;
+            cursor: pointer;
+        }
+
+        .peer-list-container {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed #444;
+        }
+
+        .peer-list {
+            list-style: none;
+            padding: 0;
+            margin: 5px 0 0 0;
+            max-height: 80px;
+            overflow-y: auto;
+        }
+
+        .peer-list li {
+            background: #222;
+            padding: 5px;
+            border-radius: 4px;
+            margin-bottom: 3px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #0f0;
+        }
+
+        .status-display {
+            margin: 15px 0;
+            padding: 12px;
+            background-color: #111;
+            border: 2px solid #555;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.1s;
+        }
+
+        .status-standby { color: #888; }
+        .status-ready { color: #0f0; text-shadow: 0 0 5px rgba(0,255,0,0.5); }
+        .status-transmitting { color: #f60; text-shadow: 0 0 5px rgba(255,102,0,0.7); }
+        .status-error { color: #f00; }
+
+        .ptt-button {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            outline: none;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+            display: inline-block;
+            border-radius: 50%;
+        }
+
+        .ptt-button:hover { transform: scale(1.02); }
+        .ptt-button.active {
+            transform: scale(0.96);
+            box-shadow: 0 0 20px rgba(255,102,0,0.9);
+        }
+
+        .ptt-button img {
+            display: block;
+            max-width: 150px; 
+            height: auto;
+            pointer-events: none; 
+            border-radius: 50%;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <div class="walkie-talkie-container">
+        <div class="antenna"></div>
+        
+        <h1>RHD Talk</h1>
+
+        <button id="install-btn" class="action-btn hidden">Install App to Home Screen</button>
+
+        <div id="setup-panel" class="panel">
+            <label for="custom-id-input">Create your Radio ID:</label>
+            <input type="text" id="custom-id-input" placeholder="e.g. BaseStation1" maxlength="20">
+            <button id="turn-on-btn" class="action-btn">Power On Radio</button>
+        </div>
+
+        <div id="connection-panel" class="panel hidden">
+            <div>Your Radio ID: <span id="my-id-display" title="Click to copy"></span></div>
+            
+            <div style="margin-top: 15px;">
+                <input type="text" id="peer-id-input" placeholder="Enter a partner's ID...">
+                <button id="connect-btn" class="action-btn">Add to Frequency</button>
+            </div>
+            
+            <div class="peer-list-container">
+                <div style="font-size: 0.8rem; color: #888; text-transform: uppercase;">Connected Radios: <span id="connection-count">0</span></div>
+                <ul class="peer-list" id="peer-list"></ul>
+            </div>
+        </div>
+
+        <div class="status-display status-standby" id="statusDisplay">
+            STATUS: Power Off
+        </div>
+
+        <button class="ptt-button" id="pttButton" disabled style="opacity: 0.5;">
+            <img src="logo.png" alt="RHD Talk Push-to-Talk Image">
+        </button>
+        
+        <div id="audio-container" style="display: none;"></div>
+    </div>
+
+    <script>
+        // --- PWA Service Worker Registration ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW failed: ', err));
+            });
+        }
+
+        // --- Handle 'Add to Home Screen' Prompt ---
+        let deferredPrompt;
+        const installBtn = document.getElementById('install-btn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.remove('hidden');
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt !== null) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                deferredPrompt = null;
+                installBtn.classList.add('hidden');
+            }
+        });
+
+        // --- Walkie Talkie Application Logic ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const setupPanel = document.getElementById('setup-panel');
+            const connectionPanel = document.getElementById('connection-panel');
+            const customIdInput = document.getElementById('custom-id-input');
+            const turnOnBtn = document.getElementById('turn-on-btn');
+            const pttButton = document.getElementById('pttButton');
+            const statusDisplay = document.getElementById('statusDisplay');
+            const myIdDisplay = document.getElementById('my-id-display');
+            const peerIdInput = document.getElementById('peer-id-input');
+            const connectBtn = document.getElementById('connect-btn');
+            const peerListUI = document.getElementById('peer-list');
+            const connectionCountUI = document.getElementById('connection-count');
+            const audioContainer = document.getElementById('audio-container');
+            
+            let isTransmitting = false;
+            let localStream = null;
+            let peer = null;
+            const activeConnections = new Map();
+            let wakeLock = null;
+
+            // --- WAKE LOCK FUNCTIONALITY ---
+            async function requestWakeLock() {
+                try {
+                    if ('wakeLock' in navigator) {
+                        wakeLock = await navigator.wakeLock.request('screen');
+                        console.log('Screen Wake Lock is active. Device will not sleep.');
+                        wakeLock.addEventListener('release', () => {
+                            console.log('Screen Wake Lock was released');
+                        });
+                    }
+                } catch (err) {
+                    console.error(`${err.name}, ${err.message}`);
+                }
+            }
+
+            document.addEventListener('visibilitychange', async () => {
+                if (wakeLock !== null && document.visibilityState === 'visible' && peer && !peer.disconnected) {
+                    await requestWakeLock();
+                }
+            });
+
+            // --- Powering On ---
+            turnOnBtn.addEventListener('click', function() {
+                const desiredId = customIdInput.value.trim().replace(/[^a-zA-Z0-9_-]/g, ''); 
+                if (!desiredId) return alert('Please enter a valid Radio ID.');
+
+                statusDisplay.textContent = 'STATUS: Booting...';
+                turnOnBtn.disabled = true;
+                turnOnBtn.textContent = 'Connecting to network...';
+
+                peer = new Peer(desiredId);
+
+                peer.on('open', function(id) {
+                    setupPanel.classList.add('hidden');
+                    connectionPanel.classList.remove('hidden');
+                    myIdDisplay.textContent = id;
+                    requestMicrophone();
+                    requestWakeLock(); 
+                });
+
+                peer.on('error', function(err) {
+                    turnOnBtn.disabled = false;
+                    turnOnBtn.textContent = 'Power On Radio';
+                    if (err.type === 'unavailable-id') {
+                        statusDisplay.textContent = 'STATUS: ID TAKEN';
+                        statusDisplay.className = 'status-display status-error';
+                        alert(`The ID "${desiredId}" is already in use by someone else.`);
+                    } else {
+                        statusDisplay.textContent = 'STATUS: NET ERROR';
+                        alert('Network error. Check console for details.');
+                    }
+                });
+
+                peer.on('call', function(call) {
+                    if (localStream) call.answer(localStream);
+                    setupCallEvents(call);
+                });
+            });
+
+            // --- Mic Setup ---
+            function requestMicrophone() {
+                navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+                    .then(function(stream) {
+                        localStream = stream;
+                        localStream.getAudioTracks()[0].enabled = false; 
+                        updateStatusUI();
+                    })
+                    .catch(function(err) {
+                        statusDisplay.textContent = 'MIC ERROR';
+                        statusDisplay.className = 'status-display status-error';
+                        alert('Please allow microphone access for the walkie-talkie to work.');
+                    });
+            }
+
+            // --- Connecting ---
+            connectBtn.addEventListener('click', function() {
+                const partnerId = peerIdInput.value.trim();
+                
+                if (!partnerId) return alert('Please enter a Radio ID.');
+                if (partnerId === peer.id) return alert("You can't connect to yourself.");
+                if (activeConnections.has(partnerId)) return alert("You are already connected to this radio.");
+                if (!localStream) return alert('Microphone not ready yet.');
+
+                statusDisplay.textContent = 'STATUS: Connecting...';
+                const call = peer.call(partnerId, localStream);
+                setupCallEvents(call);
+                peerIdInput.value = '';
+            });
+
+            function setupCallEvents(call) {
+                call.on('stream', function(remoteStream) {
+                    if (document.getElementById('audio-' + call.peer)) return;
+
+                    const audioEl = document.createElement('audio');
+                    audioEl.id = 'audio-' + call.peer;
+                    audioEl.autoplay = true;
+                    audioEl.srcObject = remoteStream;
+                    audioContainer.appendChild(audioEl);
+                    
+                    activeConnections.set(call.peer, call);
+                    updateUI();
+                });
+
+                call.on('close', () => removeConnection(call.peer));
+                call.on('error', () => removeConnection(call.peer));
+            }
+
+            function removeConnection(peerId) {
+                activeConnections.delete(peerId);
+                const audioEl = document.getElementById('audio-' + peerId);
+                if (audioEl) audioEl.remove();
+                updateUI();
+            }
+
+            // --- UI Updates ---
+            function updateUI() {
+                peerListUI.innerHTML = '';
+                activeConnections.forEach((call, id) => {
+                    const li = document.createElement('li');
+                    li.textContent = id;
+                    peerListUI.appendChild(li);
+                });
+                connectionCountUI.textContent = activeConnections.size;
+                updateStatusUI();
+            }
+
+            function updateStatusUI() {
+                if (isTransmitting) return;
+                if (!localStream) return statusDisplay.textContent = 'STATUS: No Mic';
+
+                if (activeConnections.size > 0) {
+                    statusDisplay.textContent = 'STATUS: ' + activeConnections.size + ' CONNECTED';
+                    statusDisplay.className = 'status-display status-ready';
+                    pttButton.disabled = false;
+                    pttButton.style.opacity = '1';
+                } else {
+                    statusDisplay.textContent = 'STATUS: Standing By';
+                    statusDisplay.className = 'status-display status-standby';
+                    pttButton.disabled = true;
+                    pttButton.style.opacity = '0.5';
+                }
+            }
+
+            // --- Transmitting ---
+            function startTransmission(e) {
+                if (!isTransmitting && activeConnections.size > 0 && localStream) {
+                    isTransmitting = true;
+                    localStream.getAudioTracks()[0].enabled = true;
+                    pttButton.classList.add('active');
+                    statusDisplay.textContent = 'STATUS: TRANSMITTING...';
+                    statusDisplay.className = 'status-display status-transmitting';
+                }
+            }
+
+            function stopTransmission() {
+                if (isTransmitting && localStream) {
+                    isTransmitting = false;
+                    localStream.getAudioTracks()[0].enabled = false;
+                    pttButton.classList.remove('active');
+                    updateStatusUI();
+                }
+            }
+
+            myIdDisplay.addEventListener('click', function() {
+                navigator.clipboard.writeText(this.textContent);
+                const originalText = this.textContent;
+                this.textContent = 'Copied!';
+                setTimeout(() => { this.textContent = originalText; }, 1500);
+            });
+
+            // --- Interactions ---
+            pttButton.addEventListener('mousedown', startTransmission);
+            pttButton.addEventListener('mouseup', stopTransmission);
+            pttButton.addEventListener('mouseleave', stopTransmission);
+
+            pttButton.addEventListener('touchstart', function(e) {
+                e.preventDefault(); 
+                startTransmission();
+            });
+            pttButton.addEventListener('touchend', stopTransmission);
+            pttButton.addEventListener('touchcancel', stopTransmission); 
+        });
+    </script>
+</body>
+</html>
